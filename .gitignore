@@ -1,0 +1,36 @@
+# Datasets (transferred separately via SCP)
+datasets/
+
+# Training outputs
+training_output/
+coco_output/
+labelme_merged/
+
+# Model checkpoints
+*.pth
+*.onnx
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
+nul
+
+# IDE
+.vscode/
+.idea/
+
+# Temp files
+*.tmp
+*.bak

@@ -1,0 +1,7 @@
+# RF-DETR fine-tuning dependencies
+# Install PyTorch with CUDA first (handled in Dockerfile), then:
+rfdetr>=1.5.0
+labelme2coco>=0.2.4
+scikit-learn>=1.0
+supervision
+Pillow
