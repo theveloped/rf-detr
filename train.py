@@ -205,8 +205,10 @@ def create_train_val_split(coco_data, coco_json_path):
 
     train_dir = DATASET_DIR / "train"
     val_dir = DATASET_DIR / "valid"
+    test_dir = DATASET_DIR / "test"
     train_dir.mkdir(parents=True)
     val_dir.mkdir(parents=True)
+    test_dir.mkdir(parents=True)
 
     # Build image lookup
     id_to_image = {img["id"]: img for img in coco_data["images"]}
@@ -219,10 +221,12 @@ def create_train_val_split(coco_data, coco_json_path):
             annotations_by_image[img_id] = []
         annotations_by_image[img_id].append(ann)
 
-    # Create train and val COCO JSONs
+    # Create train, val, and test COCO JSONs
+    # Test set reuses validation images (RF-DETR requires a test split)
     for split_name, split_ids, split_dir in [
         ("train", train_image_ids, train_dir),
         ("valid", val_image_ids, val_dir),
+        ("test", val_image_ids, test_dir),
     ]:
         split_images = []
         split_annotations = []
@@ -263,7 +267,11 @@ def create_train_val_split(coco_data, coco_json_path):
         )
 
     # Print class distribution per split
-    for split_name, split_dir in [("train", train_dir), ("valid", val_dir)]:
+    for split_name, split_dir in [
+        ("train", train_dir),
+        ("valid", val_dir),
+        ("test", test_dir),
+    ]:
         ann_path = split_dir / "_annotations.coco.json"
         with open(ann_path, "r") as f:
             data = json.load(f)
