@@ -18,6 +18,7 @@ import json
 import os
 import random
 import shutil
+from PIL import Image
 import sys
 from pathlib import Path
 
@@ -123,6 +124,31 @@ def merge_datasets():
 
     print(f"\n  Total labeled images merged: {total_labeled}")
     print(f"  Merged directory: {MERGED_DIR}")
+
+    # Validate all images and remove corrupted ones
+    print("\n  Validating images...")
+    corrupted = []
+    for png_file in sorted(MERGED_DIR.glob("*.png")):
+        try:
+            with Image.open(png_file) as img:
+                img.load()  # Force full decode to detect truncation
+        except Exception as e:
+            print(f"    CORRUPTED: {png_file.name} ({e})")
+            corrupted.append(png_file)
+
+    if corrupted:
+        print(
+            f"\n  Removing {len(corrupted)} corrupted image(s) and their annotations:"
+        )
+        for png_file in corrupted:
+            json_file = png_file.with_suffix(".json")
+            png_file.unlink()
+            if json_file.exists():
+                json_file.unlink()
+            print(f"    Removed: {png_file.name}")
+            total_labeled -= 1
+
+    print(f"  Valid labeled images: {total_labeled}")
     return total_labeled
 
 
