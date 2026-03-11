@@ -28,16 +28,39 @@ Requirements:
 """
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
 from PIL import Image
 
-CLASS_NAMES = ["DM", "HOUSING", "EXCHANGER", "CORE", "SHAFT"]
+# Fallback class names for backward compatibility with checkpoints that
+# don't have a class_names.json alongside them.
+DEFAULT_CLASS_NAMES = ["DM", "HOUSING", "CORE", "SHAFT", "EXCHANGER"]
 
 DEFAULT_CHECKPOINT = "./training_output/checkpoint_best_ema.pth"
 DEFAULT_THRESHOLD = 0.5
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".bmp", ".tiff", ".tif", ".webp"}
+
+
+def load_class_names(checkpoint_path: str) -> list[str]:
+    """Load class names from class_names.json next to the checkpoint.
+
+    Falls back to DEFAULT_CLASS_NAMES if the file is not found.
+    """
+    checkpoint = Path(checkpoint_path)
+    class_names_path = checkpoint.parent / "class_names.json"
+
+    if class_names_path.exists():
+        with open(class_names_path, "r") as f:
+            names = json.load(f)
+        print(f"Loaded class names from: {class_names_path}")
+        print(f"  Classes: {names}")
+        return names
+
+    print(f"WARNING: {class_names_path} not found, using default class names.")
+    print(f"  Classes: {DEFAULT_CLASS_NAMES}")
+    return DEFAULT_CLASS_NAMES
 
 
 def load_model(checkpoint_path: str):
@@ -174,8 +197,9 @@ def main():
     print(f"Found {len(image_paths)} image(s) to process.")
     print(f"Confidence threshold: {args.threshold}")
 
-    # Load model
+    # Load model and class names
     model = load_model(args.checkpoint)
+    class_names = load_class_names(args.checkpoint)
 
     # Run inference
     output_dir = Path(args.output_dir)
@@ -183,11 +207,11 @@ def main():
 
     for image_path in image_paths:
         image, detections = predict_image(model, image_path, args.threshold)
-        print_detections(image_path, detections, CLASS_NAMES)
+        print_detections(image_path, detections, class_names)
         total_detections += len(detections.xyxy)
 
         if not args.no_save:
-            save_annotated_image(image, detections, image_path, output_dir, CLASS_NAMES)
+            save_annotated_image(image, detections, image_path, output_dir, class_names)
 
     print(f"\n{'=' * 60}")
     print(

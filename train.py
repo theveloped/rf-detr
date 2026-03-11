@@ -156,48 +156,68 @@ def merge_datasets():
 # Step 2: Convert LabelMe to COCO format
 # ---------------------------------------------------------------------------
 def convert_to_coco():
-    """Convert merged LabelMe annotations to COCO JSON format."""
+    """Convert merged LabelMe annotations to COCO JSON format.
+
+    Uses the lower-level get_coco_from_labelme_folder() API with a
+    pre-defined coco_category_list to guarantee deterministic category
+    ID assignment.  This prevents label-swap bugs that occur when
+    labelme2coco auto-discovers categories in arbitrary file order.
+    """
     print("\n" + "=" * 60)
     print("STEP 2: Converting LabelMe to COCO format")
     print("=" * 60)
 
-    import labelme2coco
+    from labelme2coco import get_coco_from_labelme_folder
 
     if COCO_OUTPUT_DIR.exists():
         shutil.rmtree(COCO_OUTPUT_DIR)
+    COCO_OUTPUT_DIR.mkdir(parents=True)
 
-    # labelme2coco conversion (category_id starts at 1 for RF-DETR)
-    labelme2coco.convert(
+    # Build a fixed category list from CLASS_NAMES so that IDs are
+    # always assigned in the same order (1-indexed for RF-DETR).
+    coco_category_list = [
+        {"id": i + 1, "name": name, "supercategory": "object"}
+        for i, name in enumerate(CLASS_NAMES)
+    ]
+    print(f"  Enforced category mapping: {coco_category_list}")
+
+    # Convert using the lower-level API that accepts a predefined
+    # category list, instead of labelme2coco.convert() which doesn't.
+    coco = get_coco_from_labelme_folder(
         labelme_folder=str(MERGED_DIR),
-        export_dir=str(COCO_OUTPUT_DIR),
+        coco_category_list=coco_category_list,
         category_id_start=1,
     )
+    coco_data = coco.json
 
-    # Fix file_name fields (labelme2coco may use absolute paths)
-    coco_json_path = COCO_OUTPUT_DIR / "dataset.json"
-    if not coco_json_path.exists():
-        # Try alternative name
-        for f in COCO_OUTPUT_DIR.glob("*.json"):
-            coco_json_path = f
-            break
-
-    print(f"  COCO JSON: {coco_json_path}")
-
-    with open(coco_json_path, "r") as f:
-        coco_data = json.load(f)
-
-    # Fix file_name to be basename only
+    # Fix file_name to be basename only (labelme2coco may use absolute paths)
     for img in coco_data["images"]:
         img["file_name"] = os.path.basename(img["file_name"])
 
-    # Verify categories match our expected classes
-    print(f"  Categories found: {[c['name'] for c in coco_data['categories']]}")
+    # ---- Validate categories match CLASS_NAMES exactly ----
+    produced_names = [c["name"] for c in coco_data["categories"]]
+    assert produced_names == CLASS_NAMES, (
+        f"Category mismatch!\n"
+        f"  Expected: {CLASS_NAMES}\n"
+        f"  Got:      {produced_names}\n"
+        f"This means labelme2coco produced categories in an unexpected "
+        f"order or found unexpected labels in the annotations."
+    )
+    print(f"  Categories verified: {produced_names}")
     print(f"  Total images: {len(coco_data['images'])}")
     print(f"  Total annotations: {len(coco_data['annotations'])}")
 
-    # Save fixed COCO JSON
+    # Save COCO JSON
+    coco_json_path = COCO_OUTPUT_DIR / "dataset.json"
     with open(coco_json_path, "w") as f:
         json.dump(coco_data, f, indent=2)
+
+    # Save class_names.json alongside the dataset so inference can
+    # load the authoritative mapping instead of hardcoding it.
+    class_names_path = COCO_OUTPUT_DIR / "class_names.json"
+    with open(class_names_path, "w") as f:
+        json.dump(CLASS_NAMES, f, indent=2)
+    print(f"  Saved class mapping: {class_names_path}")
 
     return coco_data, coco_json_path
 
@@ -322,6 +342,13 @@ def train_model():
 
     # Create output directory
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Save class_names.json alongside checkpoints so inference scripts
+    # can load the authoritative class mapping instead of hardcoding it.
+    class_names_path = OUTPUT_DIR / "class_names.json"
+    with open(class_names_path, "w") as f:
+        json.dump(CLASS_NAMES, f, indent=2)
+    print(f"  Saved class mapping: {class_names_path}")
 
     model = RFDETRBase()
 
