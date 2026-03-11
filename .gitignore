@@ -1,6 +1,9 @@
 # Datasets (transferred separately via SCP)
 datasets/
 
+# Inference output (generated annotated images)
+inference_output/
+
 # Training outputs
 training_output/
 coco_output/
